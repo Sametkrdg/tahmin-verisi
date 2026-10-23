@@ -1,0 +1,43 @@
+# football-data.co.uk dosyalarını 6 saatte bir indirip bu repoya kaydeder.
+# Tahmin botu veriyi buradan (raw.githubusercontent.com) okur.
+name: Veri guncelle
+
+on:
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['indir.sh', '.github/workflows/**']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: veri-guncelle
+  cancel-in-progress: false
+
+jobs:
+  guncelle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dosyalari indir
+        run: bash indir.sh
+
+      - name: Degisiklik varsa kaydet
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898288+github-actions[bot]@users.noreply.github.com"
+          git add -A mmz4281 fixtures.csv
+          son=$(git log -1 --format=%ct)
+          # Veri değişmediyse commit atma; yine de haftada bir durum.txt ile repoyu canlı tut
+          # (GitHub, 60 gün hareketsiz repolarda zamanlanmış görevleri kapatır).
+          if git diff --cached --quiet && [ $(( $(date +%s) - son )) -lt 604800 ]; then
+            echo "Yeni veri yok."
+            exit 0
+          fi
+          git add durum.txt
+          git commit -m "Veri guncellemesi $(date -u '+%Y-%m-%d %H:%M') UTC"
+          git push
